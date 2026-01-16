@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Modular Field: A Z5 & Z7 Study</title>
+  <script>
+    window.MathJax = { 
+      tex: { inlineMath: [['$', '$']] }, 
+      svg: { fontCache: 'local' },
+      options: { enableAssistiveMml: false, menuOptions: { settings: { assistiveMml: false } } }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg: #0d1117; --card: #161b22; --border: #30363d;
+      --accent: #58a6ff; --success: #238636; --text: #c9d1d9;
+    }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      margin: 0; display: flex; flex-direction: column; align-items: center; padding: 2rem;
+    }
+    .main-panel { background: var(--card); padding: 1.5rem; border-radius: 1rem; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    canvas { background: #000; border-radius: 0.5rem; border: 1px solid var(--border); display: block; margin-bottom: 1.5rem; }
+    .controls { display: flex; gap: 1rem; width: 1280px; justify-content: center; flex-wrap: wrap; }
+    select, button {
+      background: #21262d; color: var(--text); border: 1px solid var(--border);
+      padding: 0.75rem 1.2rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    select:hover, button:hover { background: #30363d; border-color: #8b949e; }
+    .btn-play { background: var(--success); color: white; border: none; }
+    .btn-record.recording { color: #da3633; border-color: #da3633; animation: pulse 1.5s infinite; }
+    #math-buffer { position: absolute; visibility: hidden; pointer-events: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  </style>
+</head>
+<body>
+
+<div class="main-panel">
+  <canvas id="masterCanvas" width="1280" height="720"></canvas>
+  <div class="controls">
+    <select id="modulusSelect">
+      <option value="5">Prime Field: Z5</option>
+      <option value="7">Prime Field: Z7</option>
+    </select>
+    <select id="logicType">
+      <option value="ADD">The Addition Loop</option>
+      <option value="MULT">The Scaling Grid</option>
+      <option value="INVERSE">Inverse Pairings</option>
+      <option value="SQUARE">Quadratic Islands</option>
+      <option value="FERMAT">Fermat's Stability</option>
+      <option value="HYPERBOLA">Hyperbolic Orbits</option>
+    </select>
+    <button id="tessBtn">Toggle Tessellation</button>
+    <button id="playBtn" class="btn-play">Run Sequence</button>
+    <button id="recordBtn" class="btn-record"><i data-lucide="video"></i></button>
+  </div>
+</div>
+
+<div id="math-buffer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/webm-muxer@3.0.1/build/webm-muxer.js"></script>
+<script>
+  const canvas = document.getElementById('masterCanvas');
+  const ctx = canvas.getContext('2d');
+  let n = 0, logicType = 'ADD', p = 5, isPlaying = false, isRecording = false, tessellate = false;
+
+  const getInverse = (val, mod) => {
+    for (let i = 0; i < mod; i++) if ((val * i) % mod === 1) return i;
+    return 0;
+  };
+
+  const modes = {
+    ADD: { 
+      name: "The Addition Loop", 
+      formula: "$f(r, c) = (r + c + n) \\pmod p$",
+      desc: "Addition in $\\mathbb{Z}_p$ is a perfect cyclic shift. It creates a 'Latin Square' where every value appears exactly once per row and column.",
+      calc: (r, c, n, mod) => (r + c + n) % mod,
+      commentary: [
+        "The identity state ($n=0$). Observe the diagonal symmetry where $r+c$ results in a predictable wave.",
+        "Shifting by $n=1$. The entire grid slides left. In a finite field, addition is just a reordering of indices.",
+        "As $n$ grows, the 'zero-diagonal' migrates. Notice how the colors maintain their relative distance.",
+        "The pattern is essentially a flattened torus. The right side and left side connect seamlessly.",
+        "At $n=p-1$, we are at the inverse of 1. One more increment returns us to the starting identity.",
+        "In $\\mathbb{Z}_7$, the loop feels smoother, but the underlying law of linear translation is identical.",
+        "The final state before the reset. Every element has acted as a translator for the entire field."
+      ]
+    },
+    MULT: { 
+      name: "The Scaling Grid", 
+      formula: "$f(r, c) = (r \\cdot c \\cdot n) \\pmod p$",
+      desc: "Multiplication scales the field. While 0 is a permanent 'sink,' other elements shuffle to maintain the group's integrity.",
+      calc: (r, c, n, mod) => (r * c * n) % mod,
+      commentary: [
+        "At $n=0$, the field collapses. Multiplication by zero is an absorbing operation that destroys information.",
+        "The standard table ($n=1$). The first row and column are zeros, acting as anchors for the scaling to come.",
+        "Scaling by $n=2$. Because $p$ is prime, the internal $4 \\times 4$ (or $6 \\times 6$) grid is just a permutation.",
+        "Every row is a shuffle. No non-zero multiplication results in zero—this is why it's a field.",
+        "At $n=p-1$, the grid reflects. Since $p-1 \\equiv -1 \\pmod p$, we are seeing a modular mirror image.",
+        "In $\\mathbb{Z}_7$, the permutations become more complex, yet the 'zero-sink' remains the same.",
+        "Scaling by 6. Notice how $6 \\times 6 = 36 \\equiv 1$. The identity appears at the bottom-right corner."
+      ]
+    },
+    INVERSE: { 
+      name: "Inverse Pairings", 
+      formula: "$f(r, c) = (r \\cdot c^{-1} \\cdot n) \\pmod p$",
+      desc: "This visualizes modular division. Every non-zero number has a 'partner' that brings the product back to 1.",
+      calc: (r, c, n, mod) => (r * getInverse(c, mod) * n) % mod,
+      commentary: [
+        "Column 0 is undefined. Division by zero is the only 'hole' in an otherwise perfect prime field.",
+        "At $n=1$, we find the identity pairs. Notice where the value '1' appears—those are the mutual inverses.",
+        "Scaling the division. We are essentially mapping how 'fractions' behave in a world with no decimals.",
+        "The grid is rigid. Each non-zero column is a complete reshuffling of the field's elements.",
+        "Final shift. Even as we scale, the structural relationships between inverses remain fixed.",
+        "In $\\mathbb{Z}_7$, the pairings are different (e.g., $2 \\times 4 = 8 \\equiv 1$), but the symmetry holds.",
+        "The density of $\\mathbb{Z}_7$ makes the 'checkerboard' of division results much clearer."
+      ]
+    },
+    SQUARE: { 
+      name: "Quadratic Islands", 
+      formula: "$f(r, c) = (r^2 + c^2 + n) \\pmod p$",
+      desc: "Squares are picky. Only half the elements in a prime field are perfect squares, creating 'island' patterns.",
+      calc: (r, c, n, mod) => (Math.pow(r, 2) + Math.pow(c, 2) + n) % mod,
+      commentary: [
+        "The 'islands' appear because many values are 'non-residues'—they can never be the result of a square.",
+        "Shifting by $n=1$. The bilateral symmetry here reflects the geometric nature of quadratic equations.",
+        "Patterns of clustering. Some values never appear in certain rows, showing the 'curvature' of the field.",
+        "The grid begins to look like a physical tile or a wave interference pattern.",
+        "Quadratic residues are the basis for elliptic curve cryptography. They provide a predictable but complex shuffle.",
+        "In $\\mathbb{Z}_7$, the number of residues increases, giving the 'islands' a higher resolution.",
+        "The final shift for $\\mathbb{Z}_7$. Notice how the central symmetry remains the focal point."
+      ]
+    },
+    FERMAT: { 
+      name: "Fermat's Stability", 
+      formula: "$f(r, c) = (r^n + c^n) \\pmod p$",
+      desc: "Fermat's Little Theorem states $a^{p-1} \\equiv 1$. At $n=p-1$, the grid stabilizes into a binary state.",
+      calc: (r, c, n, mod) => {
+        const pow = (a, b) => b === 0 ? (a === 0 ? 0 : 1) : Math.pow(a, b) % mod;
+        return (pow(r, n) + pow(c, n)) % mod;
+      },
+      commentary: [
+        "At $n=0$, $x^0 = 1$. The whole grid becomes a constant field of $1+1=2$.",
+        "At $n=1$, we return to the basic Addition Loop. Powers in finite fields are periodic.",
+        "At $n=2$, the quadratic patterns return. We are cycling through the degrees of the field.",
+        "Each increase in power reshuffles the field according to its cyclic subgroup structure.",
+        "The Fermat Point ($n=4$). Every non-zero $x^4=1$, so the grid is a rigid set of $\{0, 1, 2\}$.",
+        "In $\\mathbb{Z}_7$, the stability point won't be reached until $n=6$.",
+        "The Fermat Point for $\\mathbb{Z}_7$. Stability is achieved as every $x^6$ collapses to 1."
+      ]
+    },
+    HYPERBOLA: { 
+      name: "Hyperbolic Orbits", 
+      formula: "$f(r, c) = (r \\cdot c + n) \\pmod p$",
+      desc: "This is the modular equivalent of the curve $xy=k$. It reveals how areas are distributed across the field.",
+      calc: (r, c, n, mod) => (r * c + n) % mod,
+      commentary: [
+        "At $n=0$, the products form an L-shaped boundary. All values off the axes are non-zero.",
+        "The 'zero-points' migrate into the field, forming hyperbolic curves that never touch the origin.",
+        "Each curve represents a set of $(r,c)$ pairs that share the same product—modular area.",
+        "The symmetry is absolute: $(r,c)$ and $(c,r)$ are always identical in this view.",
+        "A final shift. These orbits are used in digital signal processing and number theoretic transforms.",
+        "In $\\mathbb{Z}_7$, the hyperbolas are more defined, showing the finer 'grain' of the field.",
+        "Observe how the curves 'wrap' around the edges, reinforcing the torus topology."
+      ]
+    }
+  };
+
+  const stampHtml = async (html, x, y, width) => {
+    const buffer = document.getElementById('math-buffer');
+    buffer.innerHTML = '';
+    MathJax.typesetClear([buffer]);
+    buffer.innerHTML = html;
+    await MathJax.typesetPromise([buffer]);
+    const style = MathJax.svgStylesheet();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width*2}" height="800"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="transform:scale(2);transform-origin:top left;color:#8b949e;font-family:sans-serif;"><style>${style} mjx-assistive-mml{display:none!important;}</style><div style="width:${width}px;">${buffer.innerHTML}</div></div></foreignObject></svg>`;
+    return new Promise(res => {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, x, y, width, 450); res(); };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  };
+
+  const draw = async () => {
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, 1280, 720);
+    const colors = ['#21262d', '#388bfd', '#79c0ff', '#39d353', '#f2cc60', '#ff7b72', '#a5d6ff'];
+    const totalArea = 480;
+    const iterations = tessellate ? p * 2 : p;
+    const cellSize = (totalArea / iterations) - 5;
+    const startX = 110, startY = 130;
+
+    for (let r = 0; r < iterations; r++) {
+      for (let c = 0; c < iterations; c++) {
+        const val = modes[logicType].calc(r % p, c % p, n, p) % p;
+        const x = startX + c * (cellSize + 5), y = startY + r * (cellSize + 5);
+        ctx.fillStyle = colors[val]; ctx.beginPath(); ctx.roundRect(x, y, cellSize, cellSize, 4); ctx.fill();
+        if (!tessellate || cellSize > 35) {
+          ctx.fillStyle = (val === 0) ? '#8b949e' : '#0d1117';
+          ctx.font = `bold ${cellSize/2.5}px sans-serif`; ctx.textAlign = 'center';
+          ctx.fillText(val, x + cellSize/2, y + cellSize/2 + (cellSize/6));
+        }
+      }
+    }
+
+    ctx.textAlign = 'left'; ctx.fillStyle = '#f0f6fc'; ctx.font = '600 42px sans-serif';
+    ctx.fillText(`${modes[logicType].name} (Z${p})`, 680, 80);
+
+    const commIdx = Math.min(n, modes[logicType].commentary.length - 1);
+    const html = `
+      <div style="margin-bottom:20px;">
+        <div style="color:#58a6ff;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">The Transformation</div>
+        <div style="font-size:28px;color:#f0f6fc;">${modes[logicType].formula}</div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="color:#f2cc60;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Theory</div>
+        <div style="font-size:17px;color:#f0f6fc;line-height:1.5;">${modes[logicType].desc}</div>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="color:#39d353;font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Insight (State n=${n})</div>
+        <div style="font-size:17px;color:#8b949e;line-height:1.6;font-style:italic;">${modes[logicType].commentary[commIdx]}</div>
+      </div>
+    `;
+    await stampHtml(html, 680, 130, 520);
+  };
+
+  const toggleRecord = async () => {
+    isRecording = true; document.getElementById('recordBtn').classList.add('recording');
+    const muxer = new WebMMuxer.Muxer({ target: new WebMMuxer.ArrayBufferTarget(), video: { codec: 'V_VP9', width: 1280, height: 720 } });
+    const encoder = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: console.error });
+    encoder.configure({ codec: 'vp09.00.10.08', width: 1280, height: 720, bitrate: 4000000 });
+
+    let timestamp = 0;
+    const modsToRecord = [5, 7];
+    for (const mod of modsToRecord) {
+      p = mod;
+      for (const key of Object.keys(modes)) {
+        logicType = key;
+        const totalSteps = Math.max(p, modes[key].commentary.length);
+        for (let i = 0; i < totalSteps; i++) {
+          if (!isRecording) break;
+          n = i % p; await draw();
+          const frame = new VideoFrame(canvas, { timestamp, duration: 3000000 });
+          encoder.encode(frame, { keyFrame: true }); frame.close(); timestamp += 3000000;
+        }
+      }
+    }
+    await encoder.flush(); muxer.finalize();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([muxer.target.buffer], { type: 'video/webm' })); a.download = `Modular_Field_Study.webm`; a.click();
+    isRecording = false; document.getElementById('recordBtn').classList.remove('recording'); draw();
+  };
+
+  document.getElementById('modulusSelect').onchange = (e) => { p = parseInt(e.target.value); n = 0; draw(); };
+  document.getElementById('logicType').onchange = (e) => { logicType = e.target.value; n = 0; draw(); };
+  document.getElementById('tessBtn').onclick = (e) => { tessellate = !tessellate; draw(); };
+  document.getElementById('playBtn').onclick = (e) => {
+    isPlaying = !isPlaying; e.target.innerText = isPlaying ? "Stop Sequence" : "Run Sequence";
+    if (isPlaying) { const loop = setInterval(async () => { if (!isPlaying) clearInterval(loop); else { n = (n + 1) % p; await draw(); } }, 2500); }
+  };
+  document.getElementById('recordBtn').onclick = toggleRecord;
+  lucide.createIcons(); window.onload = draw;
+</script>
+</body>
+</html>
